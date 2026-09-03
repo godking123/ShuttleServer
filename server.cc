@@ -1,8 +1,21 @@
 #include <iostream>
 #include <cstring>
+#include <thread>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+
+void handleClient(int clientSocket) {
+    std::cout << "Client connected!\n";
+
+    char buffer[1024] = {0};
+    ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
+    if (bytesRead > 0) {
+        std::cout << "Received: " << buffer << "\n";
+    }
+
+    close(clientSocket);
+}
 
 int main() {
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -20,28 +33,24 @@ int main() {
         perror("bind failed");
         return 1;
     }
-    
-    std::cout << "Socket created and bound to port 5000.\n";
 
-    if (listen(serverSocket, 1) < 0) {
+    if (listen(serverSocket, 5) < 0) {
         perror("listen failed");
         return 1;
     }
 
-    int clientSocket = accept(serverSocket, nullptr, nullptr);
-    if (clientSocket < 0) {
-        perror("accept failed");
-        return 1;
-    }
-    std::cout << "Client Connected\n";
-    
-    char buffer[1024] = {0};
-    ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
-    if (bytesRead > 0) {
-      std::cout << "Recieved: " << buffer << "\n";
+    std::cout << "Listening on port 5000...\n";
+
+    while (true) {
+        int clientSocket = accept(serverSocket, nullptr, nullptr);
+        if (clientSocket < 0) {
+            perror("accept failed");
+            continue;
+        }
+
+        std::thread(handleClient, clientSocket).detach();
     }
 
-    close(clientSocket);
     close(serverSocket);
     return 0;
 }
