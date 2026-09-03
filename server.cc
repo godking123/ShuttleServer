@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstring>
+#include "ThreadPool.h"
 #include <thread>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -40,6 +41,7 @@ int main() {
     }
 
     std::cout << "Listening on port 5000...\n";
+    ThreadPool pool(4);
 
     while (true) {
         int clientSocket = accept(serverSocket, nullptr, nullptr);
@@ -48,7 +50,7 @@ int main() {
             continue;
         }
 
-        std::thread(handleClient, clientSocket).detach();
+        pool.submit(handleClient, clientSocket);
     }
 
     close(serverSocket);
