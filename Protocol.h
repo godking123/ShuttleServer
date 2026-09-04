@@ -33,16 +33,24 @@ inline std::string readLine(int socket) {
 
     while (true) {
         ssize_t n = recv(socket, &c, 1, 0);
-        if (n <= 0) {
-            break;
-        }
-        if (c == '\n') {
-            break;
-        }
+        if (n <= 0) break;
+        if (c == '\n') break;
         line += c;
     }
 
     return line;
+}
+
+inline std::string buildRegisterMessage(const std::string& workerId) {
+    return MsgType::REGISTER + "|" + workerId + "\n";
+}
+
+inline std::string buildPing(const std::string& workerId) {
+    return MsgType::PING + "|" + workerId + "\n";
+}
+
+inline std::string buildPong() {
+    return MsgType::PONG + "\n";
 }
 
 inline std::string buildJobMessage(const std::string& jobId, const std::string& payload) {
@@ -51,14 +59,6 @@ inline std::string buildJobMessage(const std::string& jobId, const std::string& 
 
 inline std::string buildResultMessage(const std::string& jobId, const std::string& status) {
     return MsgType::RESULT + "|" + jobId + "|" + status + "\n";
-}
-
-inline std::string buildPing() {
-    return MsgType::PING + "\n";
-}
-
-inline std::string buildPong() {
-    return MsgType::PONG + "\n";
 }
 
 #endif // PROTOCOL_H
