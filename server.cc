@@ -32,12 +32,11 @@ void handleClient(int clientSocket, const std::string& clientIp) {
             std::string jobId = std::to_string(nextJobId++);
             jobRegistry.addJob(jobId, fields[1]);
             std::cout << "Job submitted: " << jobId << " -> " << fields[1] << "\n";
-        }    
+        }
     }
 
     close(clientSocket);
 }
-
 
 void heartbeatMonitor(int intervalMs, int timeoutMs) {
     while (true) {
@@ -51,6 +50,55 @@ void heartbeatMonitor(int intervalMs, int timeoutMs) {
             if (!jobId.empty()) {
                 std::cout << "  Rescheduling job " << jobId << " (was on " << workerId << ")\n";
                 jobRegistry.requeueJob(jobId);
+            }
+        }
+    }
+}
+
+void dispatcher() {
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+
+        std::string workerId = registry.findIdleWorker();
+        std::string jobId = jobRegistry.findPendingJob();
+        if (workerId.empty() || jobId.empty()) continue;
+
+        std::string workerIp;
+        int workerPort;
+        if (!registry.getAddress(workerId, workerIp, workerPort)) continue;
+
+        std::string payload = jobRegistry.getPayload(jobId);
+        jobRegistry.assignJob(jobId, workerId);
+        registry.setCurrentJob(workerId, jobId);
+        registry.setStatus(workerId, WorkerStatus::Busy);
+
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(workerPort);
+        inet_pton(AF_INET, workerIp.c_str(), &addr.sin_addr);
+
+        if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
+            perror("dispatch connect failed");
+            close(sock);
+            jobRegistry.requeueJob(jobId);
+            registry.setStatus(workerId, WorkerStatus::Idle);
+            continue;
+        }
+
+        std::string msg = buildJobMessage(jobId, payload);
+        send(sock, msg.c_str(), msg.length(), 0);
+        std::cout << "Dispatched job " << jobId << " to " << workerId << "\n";
+
+        std::string resultLine = readLine(sock);
+        close(sock);
+
+        if (!resultLine.empty()) {
+            std::vector<std::string> fields = splitMessage(resultLine);
+            if (fields[0] == MsgType::RESULT && fields.size() >= 3) {
+                std::cout << "Job " << fields[1] << " result: " << fields[2] << "\n";
+                jobRegistry.completeJob(fields[1]);
+                registry.setStatus(workerId, WorkerStatus::Idle);
             }
         }
     }
@@ -82,9 +130,11 @@ int main() {
 
     ThreadPool pool(4);
 
-    // Mark Dead After 15 Seconds Idle
     std::thread monitorThread(heartbeatMonitor, 5000, 15000);
     monitorThread.detach();
+
+    std::thread dispatcherThread(dispatcher);
+    dispatcherThread.detach();
 
     while (true) {
         sockaddr_in clientAddr{};

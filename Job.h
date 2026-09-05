@@ -69,6 +69,14 @@ public:
         auto it = jobs.find(jobId);
         return (it != jobs.end()) ? it->second.payload : "";
     }
+
+    std::string findPendingJob() {
+        std::lock_guard<std::mutex> lk(mtx);
+        for (auto& pair : jobs) {
+            if (pair.second.status == JobStatus::Pending) return pair.first;
+        }
+        return "";
+    }
 };
 
 #endif // JOB_H

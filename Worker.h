@@ -39,15 +39,6 @@ public:
         workers.emplace(id, Worker(id, ip, port));
    }
 
-   bool getAddress(const std::string& id, std::string& ipOut, int& portOut) {
-        std::lock_guard<std::mutex> lk(mtx);
-        auto it = workers.find(id);
-        if (it == workers.end()) return false;
-        ipOut = it->second.ip;
-        portOut = it->second.port;
-        return true;
-    }
-
     void updateHeartbeat(const std::string& id) {
         std::lock_guard<std::mutex> lk(mtx);
         auto it = workers.find(id);
@@ -97,6 +88,23 @@ public:
             }
         }
         return newlyDead;
+    }
+
+    std::string findIdleWorker() {
+        std::lock_guard<std::mutex> lk(mtx);
+        for (auto& pair : workers) {
+            if (pair.second.status == WorkerStatus::Idle) return pair.first;
+        }
+        return "";
+    }
+
+    bool getAddress(const std::string& id, std::string& ipOut, int& portOut) {
+        std::lock_guard<std::mutex> lk(mtx);
+        auto it = workers.find(id);
+        if (it == workers.end()) return false;
+        ipOut = it->second.ip;
+        portOut = it->second.port;
+        return true;
     }
 };
 
