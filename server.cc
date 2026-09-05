@@ -8,30 +8,36 @@
 #include "Protocol.h"
 #include "Worker.h"
 #include "Job.h"
+#include <atomic>
 
 WorkerRegistry registry;
 JobRegistry jobRegistry;
 
-void handleClient(int clientSocket) {
+std::atomic<int> nextJobId{1};
+
+void handleClient(int clientSocket, const std::string& clientIp) {
     std::string line = readLine(clientSocket);
     if (!line.empty()) {
         std::vector<std::string> fields = splitMessage(line);
 
-        if (fields[0] == MsgType::REGISTER && fields.size() >= 2) {
-            registry.registerWorker(fields[1]);
-            std::cout << "Registered worker: " << fields[1] << "\n";
-
+        if (fields[0] == MsgType::REGISTER && fields.size() >= 3) {
+            int port = std::stoi(fields[2]);
+            registry.registerWorker(fields[1], clientIp, port);
+            std::cout << "Registered worker: " << fields[1] << " at " << clientIp << ":" << port << "\n";
         } else if (fields[0] == MsgType::PING && fields.size() >= 2) {
             registry.updateHeartbeat(fields[1]);
             std::cout << "Heartbeat from: " << fields[1] << "\n";
 
-        } else if (fields[0] == MsgType::JOB && fields.size() >= 3) {
-            std::cout << "Job " << fields[1] << ": " << fields[2] << "\n";
-        }
+        } else if (fields[0] == MsgType::JOB && fields.size() >= 2) {
+            std::string jobId = std::to_string(nextJobId++);
+            jobRegistry.addJob(jobId, fields[1]);
+            std::cout << "Job submitted: " << jobId << " -> " << fields[1] << "\n";
+        }    
     }
 
     close(clientSocket);
 }
+
 
 void heartbeatMonitor(int intervalMs, int timeoutMs) {
     while (true) {
@@ -81,12 +87,16 @@ int main() {
     monitorThread.detach();
 
     while (true) {
-        int clientSocket = accept(serverSocket, nullptr, nullptr);
-        if (clientSocket < 0) {
-            perror("accept failed");
-            continue;
-        }
-        pool.submit(handleClient, clientSocket);
+        sockaddr_in clientAddr{};
+        socklen_t clientLen = sizeof(clientAddr);
+        int clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientLen);
+        if (clientSocket < 0) { perror("accept failed"); continue; }
+
+        char ipBuf[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &clientAddr.sin_addr, ipBuf, sizeof(ipBuf));
+        std::string clientIp(ipBuf);
+
+        pool.submit(handleClient, clientSocket, clientIp);
     }
 
     close(serverSocket);

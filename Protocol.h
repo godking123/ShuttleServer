@@ -41,8 +41,8 @@ inline std::string readLine(int socket) {
     return line;
 }
 
-inline std::string buildRegisterMessage(const std::string& workerId) {
-    return MsgType::REGISTER + "|" + workerId + "\n";
+inline std::string buildRegisterMessage(const std::string& workerId, int listenPort) {
+    return MsgType::REGISTER + "|" + workerId + "|" + std::to_string(listenPort) + "\n";
 }
 
 inline std::string buildPing(const std::string& workerId) {

@@ -18,12 +18,13 @@ struct Worker {
     WorkerStatus status;
     std::chrono::steady_clock::time_point lastHeartbeat;
     std::string currentJobId;
+    std::string ip;
+    int port;
 
-    Worker(const std::string& workerId)
-        : id(workerId),
-          status(WorkerStatus::Idle),
+    Worker(const std::string& workerId, const std::string& workerIp, int workerPort)
+        : id(workerId), status(WorkerStatus::Idle),
           lastHeartbeat(std::chrono::steady_clock::now()),
-          currentJobId("")
+          currentJobId(""), ip(workerIp), port(workerPort)
     {}
 };
 
@@ -33,9 +34,18 @@ private:
     std::mutex mtx;
 
 public:
-    void registerWorker(const std::string& id) {
+   void registerWorker(const std::string& id, const std::string& ip, int port) {
         std::lock_guard<std::mutex> lk(mtx);
-        workers.emplace(id, Worker(id));
+        workers.emplace(id, Worker(id, ip, port));
+   }
+
+   bool getAddress(const std::string& id, std::string& ipOut, int& portOut) {
+        std::lock_guard<std::mutex> lk(mtx);
+        auto it = workers.find(id);
+        if (it == workers.end()) return false;
+        ipOut = it->second.ip;
+        portOut = it->second.port;
+        return true;
     }
 
     void updateHeartbeat(const std::string& id) {
